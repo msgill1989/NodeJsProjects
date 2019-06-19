@@ -1,2 +1,2 @@
 # NodeJsProjects
-This repository contains my Nodejs project code.
+This repository contains all the assignments done by for nodejs master class by pirple. 
