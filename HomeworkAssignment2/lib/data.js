@@ -8,22 +8,22 @@
 //Dependencies
 const path=require('path');
 const fs=require('fs');
-const path=require('path');
+const helpers=require('./helpers');
 
 
 
 //Data object
-const data={};
+const lib={};
 
 //set the base directory i.e. .data
-data.baseDir=path.join(__dir,'/../.data')
+lib.baseDir=path.join(__dirname,'/../.data/');
 
 //Write function
 //Mandatory parameters: Name, emailAdd, StreetAdd 
 //optional parameters: None
-data.write=(dir,file,data,callback)=>{
+lib.write=(dir,file,data,callback)=>{
     //Open the file for writting
-    fs.open(data.baseDir+dir+'/'+file+'.json','wx',(err,fileDescriptor)=>{
+    fs.open(lib.baseDir+dir+'/'+file+'.json','wx',(err,fileDescriptor)=>{
         if(!err && fileDescriptor){
 
             //Convert the data to string
@@ -48,26 +48,74 @@ data.write=(dir,file,data,callback)=>{
             });
         }
         else{
+            console.log(lib.baseDir);
             callback('Could not create a new file, it may already exist');
         }
     });
 };
 
 //Get function
-data.get=()=>{
-
+//Mandatory parameters:directory, fileName
+lib.read=(dir,file,callback)=>{
+    fs.readFile(lib.baseDir+dir+'/'+file+'.json','utf-8',(err,data)=>{
+        if(!err && data){
+            const parsedata=helpers.parseJsonToObj(data)
+            callback(false,parsedata);    
+        }
+        else{
+             callback(err,data);
+        }
+    });
 }
 
 //Update function
-data.get=()=>{
-
+//Mandatory Parameters: directory, filename, data
+lib.update=(dir,file,data,callback)=>{
+    fs.open(lib.baseDir+dir+'/'+file+'.json','r+',(err, fileDescriptor)=>{
+        if(!err && fileDescriptor){
+            const strData=JSON.stringify(data);
+            fs.ftruncate(fileDescriptor,(err)=>{
+                if(!err){
+                    fs.writeFile(fileDescriptor,strData,(err)=>{
+                        if(!err){
+                            fs.close(fileDescriptor,(err)=>{
+                                if(!err){
+                                    callback(false);
+                                }
+                                else{
+                                    callback('Error in closing the file!');
+                                }
+                            });
+                        }
+                        else{
+                            callback('Error in writing to file.');
+                        }
+                    });
+                }
+                else{
+                    callback('Error truncating the file.');
+                }
+            });
+        }
+        else{
+            callback('Could not open the file for updating');
+        }
+    });
 };
 
 //delete function
-data.delete=()=>{
-
+//Mandatory fields: File Name
+lib.delete=(dir,file,callback)=>{
+    fs.unlink(lib.baseDir+dir+'/'+file+'.json',(err)=>{
+        if(!err){
+            callback(false);
+        }
+        else{
+            callback('Error in deleting the file!');
+        }
+    });
 };
 
 
 //Export the data object
-module.exports=data;
+module.exports=lib;
