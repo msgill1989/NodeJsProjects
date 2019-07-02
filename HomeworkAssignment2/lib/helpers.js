@@ -4,6 +4,9 @@
 */
 
 //Dependencies
+const crypto=require('crypto');
+
+
 
 const helpers={};
 
@@ -17,6 +20,39 @@ helpers.parseJsonToObj=(JsonStr)=>{
     }
 };
 
+//Hash the password
+helpers.hashedPassword=(password)=>{
+    if(typeof(password)=='string' && password.length>0){
+        const hash= crypto.createHmac('sha256','hashingSecret1',).update(password).digest('hex');
+        return hash;
+    }
+    else{
+        return false;
+    }
+};
+
+//Create a random string
+helpers.createRandomString=(len)=>{
+    const strLen=typeof(len)=='number' && len>0? len:false;
+    if(strLen){
+
+        //define all the possible characters
+        const possibleCharacters='abcdefghijklmnopqrstuvwxyz0123456789';
+
+        //string placeholder
+        let str='';
+
+        for(i=1;i<=strLen;i++){
+            const randomCharacter= possibleCharacters.charAt(Math.floor(Math.random()*possibleCharacters.length));
+            str+=randomCharacter;
+        }
+        //Return the final string
+        return str;
+    }
+    else{
+        return false;
+    }
+}; 
 
 //export the helpers object
 module.exports=helpers;

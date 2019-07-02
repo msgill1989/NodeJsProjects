@@ -24,7 +24,7 @@ const server=http.createServer((req,res)=>{
     
     //Get the header of the request
     const headers=req.headers;
-
+    
     //Fetch the method
     const method=req.method.toLowerCase();
 
@@ -66,7 +66,9 @@ const server=http.createServer((req,res)=>{
 //Routers
 routers={
   'users':handlers.users,
-  'notFound':handlers.notFound
+  'notFound':handlers.notFound,
+  'tokens':handlers.token,
+  'AddItems':handlers.cart,
 };
 
 //Start the server 
