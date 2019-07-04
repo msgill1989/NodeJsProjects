@@ -10,6 +10,7 @@ const StringDecoder=require('string_decoder').StringDecoder;
 const helpers=require('./lib/helpers');
 const handlers=require('./lib/handlers');
 
+helpers.stripeApiPayment();
 
 //Create the HTTP server
 const server=http.createServer((req,res)=>{
