@@ -9,8 +9,8 @@ const url=require('url');
 const StringDecoder=require('string_decoder').StringDecoder;
 const helpers=require('./lib/helpers');
 const handlers=require('./lib/handlers');
+const config=require('./lib/config');
 
-helpers.stripeApiPayment();
 
 //Create the HTTP server
 const server=http.createServer((req,res)=>{
@@ -18,7 +18,7 @@ const server=http.createServer((req,res)=>{
     //Get the path of the request
     const parsedUrl=url.parse(req.url,true);
     const path=parsedUrl.pathname;
-    const trimmedPath=path.replace(/^\/+|\/+$/g,'')
+    const trimmedPath=path.replace(/^\/+|\/+$/g,'');
 
     //get the query string
     const queryString=parsedUrl.query;
@@ -69,10 +69,11 @@ routers={
   'users':handlers.users,
   'notFound':handlers.notFound,
   'tokens':handlers.token,
-  'AddItems':handlers.cart,
+  'menuItems':handlers.cart,
+  'checkout':handlers.checkout
 };
 
 //Start the server 
-server.listen(3000,()=>{
-    console.log('server is running on port')
+server.listen(config.environment.httpPort,()=>{
+    console.log('server is running on port: '+config.environment.httpPort);
 });

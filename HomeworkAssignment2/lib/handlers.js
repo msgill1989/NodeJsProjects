@@ -28,7 +28,7 @@ handlers.users=(data,callback)=>{
     }
 };
 
-//handler's token
+//token handler
 handlers.token=(data,callback)=>{
     const acceptableMethods=['get','post','put','delete'];
     if(acceptableMethods.indexOf(data.method)>-1){
@@ -39,9 +39,9 @@ handlers.token=(data,callback)=>{
     }
 };
 
-//Container of all the cart methods
+//cart handler
 handlers.cart=(data,callback)=>{
-    const acceptableMethods=['get','post','put','delete'];
+    const acceptableMethods=['get','post'];
     if(acceptableMethods.indexOf(data.method)>-1){
         handlers._cart[data.method](data,callback);
     }
@@ -50,27 +50,46 @@ handlers.cart=(data,callback)=>{
     }
 };
 
-//_users object and container of all the methods
+//checkOut Handler
+handlers.checkout=(data,callback)=>{
+    const acceptableMethods='post';
+    if(data.method==acceptableMethods){
+        handlers._checkout(data,callback);
+    }
+    else{
+        callback(405,{'Error':'The given method is not acceptable.'})
+    }
+};
+
+//_users object and container of all the user methods
 handlers._users={};
 
-//Container of all the methods for token handler
+//_token object and container of all the token methods
 handlers._token={};
 
-//Container for all the cart methods
+//_cart object and container of all the cart methods
 handlers._cart={};
 
 //Get method for users handler
-//Mandatory fields: FileName
+//Mandatory fields: Email and tokenid
+//Optional fiels:None
 handlers._users.get=(data,callback)=>{
     const email= typeof(data.queryString.email)=='string' && data.queryString.email.trim().length>0 ?data.queryString.email: false;
-
-    if(email){
-        _data.read('users',email,(err,userData)=>{
-            if(!err){
-                callback(200,userData);
+    const tokenid=typeof(data.header.tokenid)=='string' && data.header.tokenid.trim().length==20 ?data.header.tokenid :false;
+    if(email && tokenid){
+        handlers._token.verifyToken(tokenid,email,(status)=>{
+            if(status){
+                _data.read('users',email,(err,userData)=>{
+                    if(!err && userData){
+                        callback(200,userData);
+                    }
+                    else{
+                        callback(500,{'Error':'Error occured while fetching data from user file'});
+                    }
+                });
             }
             else{
-                callback(500,{'Error':'Error occured while fetching data from user file'});
+                callback(401,{'Error':'The user with this token id don\'t have access to view user'});
             }
         });
     }
@@ -87,8 +106,8 @@ handlers._users.post=(data,callback)=>{
     const name=typeof(data.payload.name)=='string' && data.payload.name.trim().length >0 ? data.payload.name: false;
     const email=typeof(data.payload.email)=='string' && data.payload.email.trim().length>0 ?data.payload.email :false;
     const password=typeof(data.payload.password)=='string' && data.payload.password.trim().length>0 ?data.payload.password: false;
-    const streetAddress=typeof(data.payload.streetAddress)=='string' && data.payload.streetAddress.trim().length>0 ?data.payload.streetAddress:false;
-
+    const streetAddress=typeof(data.payload.streetAddress)=='object' ?data.payload.streetAddress:false;
+    
     if(name && email && streetAddress){
 
         _data.read('users',email,(err)=>{
@@ -126,103 +145,121 @@ handlers._users.post=(data,callback)=>{
 }
 
 //put method for users handler
-//Mandatory fields: email
+//Mandatory fields: email, correct token and passwsord
 //optional fields: streetAddress, Name
 handlers._users.put=(data,callback)=>{
     //Validate input parameters
-    const email=typeof(data.payload.email)=='string' && data.payload.email.trim().length >0? data.payload.email: false;
+    const email=typeof(data.payload.email)=='string' && data.payload.email.trim().length >0? data.payload.email.trim(): false;
     const name=typeof(data.payload.name)=='string' && data.payload.name.trim().length>0 ?data.payload.name : false;
     const streetAddress =typeof(data.payload.streetAddress) =='string' && data.payload.streetAddress.trim().length>0?data.payload.streetAddress:false;
     const password=typeof(data.payload.password)=='string' && data.payload.password.trim().length>0? data.payload.password: false;
+    const tokenid=typeof(data.header.tokenid)=='string' && data.header.tokenid.trim().length==20? data.header.tokenid: false;
 
     if(email)
     {
         if(name || streetAddress){
-            _data.read('users',email,(err,userData)=>{
-                if(!err && userData){
-                    //Update the fields
-                    if(name){
-                        userData.name=name;
-                    }
-                    if(streetAddress){
-                        userData.streetAddress=streetAddress;
-                    }
-                    if(password){
-                        userData.password=helpers.hashedPassword(password);
-                    }
-                    //update the data
-                    _data.update('users',email,userData,(err)=>{
-                        if(!err){
-                            callback(200,{'Success':'User data has been updated successfully!'})
+            handlers._token.verifyToken(tokenid,email,(status)=>{
+                if(status){
+                    _data.read('users',email,(err,userData)=>{
+                        if(!err && userData){
+                            //Update the fields
+                            if(name){
+                                userData.name=name;
+                            }
+                            if(streetAddress){
+                                userData.streetAddress=streetAddress;
+                            }
+                            if(password){
+                                userData.password=helpers.hashedPassword(password);
+                            }
+                            //update the data
+                            _data.update('users',email,userData,(err)=>{
+                                if(!err){
+                                    callback(200,{'Success':'User data has been updated successfully!'})
+                                }
+                                else{
+                                    callback(500,{'Error':'Error occured while updating the data!'})
+                                }
+                            });
                         }
                         else{
-                            callback(500,{'Error':'Error occured while updating the data!'})
+                            callback(400,{'Error':'The user with this email is not found!'});
                         }
                     });
                 }
                 else{
-                    callback(400,{'Error':'The user with this email is not found!'});
+                    callback(403,{'Error':'The customer with this token is not authorized to modify this customer\'s data'})
                 }
             });
+
         }
         else{
             callback(400,{'Error':'Either name or streetAddress are not in expected format!'})
         }
     }
     else{
-        callback(400,{'Error':'The Mandatory email is not provided!'})
+        callback(400,{'Error':'The Mandatory fields are not provided!'})
     }
 }
 
 //delete method for users handler
-//Mandatory fields: email
+//Mandatory fields: email and token id
 handlers._users.delete=(data,callback)=>{
 
     const email=typeof(data.queryString.email)=='string' && data.queryString.email.trim().length>0 ?data.queryString.email :false;
-    if(email){
-        _data.read('users',email,(err,data)=>{
-            if(!err && data){
-                _data.delete('users',email,(err)=>{
-                    if(!err){
-                        callback(200,{'Success':'File deleted successfully!'})
+    const tokenid=typeof(data.header.tokenid)=='string' && data.header.tokenid.trim().length==20? data.header.tokenid :false;
+ 
+    if(email && tokenid){
+        handlers._token.verifyToken(tokenid,email,(status)=>{
+            if(status){
+                _data.read('users',email,(err,data)=>{
+                    if(!err && data){
+                        _data.delete('users',email,(err)=>{
+                            if(!err){
+                                callback(200,{'Success':'File deleted successfully!'})
+                            }
+                            else{
+                                callback(500,{'Error':'Error occured while deleting the file!'})
+                            }
+                        });
                     }
                     else{
-                        callback(500,{'Error':'Error occured while deleting the file!'})
+                        callback(400, {'Error':'The file with this email does not exist!'})
                     }
                 });
             }
             else{
-                callback(400, {'Error':'The file with this email does not exist!'})
+                callback(403,{'Error':'The users with this token in not authorized to delete user data.'})
             }
         });
-
     }
     else{
-        callback(400,{'Error':'Mandatory field \'email\' is not provided!'})
+        callback(400,{'Error':'Mandatory fields \'email\' or \'tokenid\' is not provided!'})
     }
 }
 
 //GET method for token
-//Mandatory fields: token ID
+//Mandatory fields: Header: tokenID and Querystring: email id
 handlers._token.get=(data,callback)=>{
-    const tokenId=typeof(data.queryString.tokenId)=='string' && data.queryString.tokenId.trim().length==20? data.queryString.tokenId : false;
-    if(tokenId){
-        _data.read('tokens',tokenId,(err,tokenData)=>{
-            if(!err && tokenData){
-                callback(200,tokenData)
-            }
-            else{
-                callback(404,{'Error':'The provided token is not found!'})
-            }
-        });
+    const email=typeof(data.queryString.email)=='string' && data.queryString.email.trim().length>0? data.queryString.email: false;
+
+    if(email){
+                _data.read('tokens',tokenid,(err,tokenData)=>{
+                    if(!err && tokenData){
+                        callback(200,tokenData)
+                    }
+                    else{
+                        callback(404,{'Error':'The provided token is not found!'})
+                    }
+                });
     }
     else{
-        callback(400,{'Error':'The mandatory field is not provided!'})
+        callback(400,{'Error':'The mandatory fields, email or tokenid are not provided!'})
     }
 };
 
 //POST method for token
-//Mandatory fields: EMail and password
+//Mandatory fields, payload: Email and password
 handlers._token.post=(data,callback)=>{
     const email= typeof(data.payload.email)=='string' && data.payload.email.trim().length>0?data.payload.email:false;
     const password=typeof(data.payload.password)=='string' && data.payload.password.trim().length>0? data.payload.password:false;
@@ -235,7 +272,7 @@ handlers._token.post=(data,callback)=>{
                     const tokenId=helpers.createRandomString(20);
                     const expires=Date.now()+1000*60*60;
 
-                    //tokem opject
+                    //token opject
                     const tokenObj={
                         'email': email,
                         'tokenId':tokenId,
@@ -267,8 +304,37 @@ handlers._token.post=(data,callback)=>{
 };
 
 //PUT method for token
+//Mandatory fields: tokenId(string), extend(boolean),
 handlers._token.put=(data,callback)=>{
-    
+    const tokenid=typeof(data.payload.tokenid)=='string' && data.payload.tokenid.trim().length==20 ? data.payload.tokenid :false;
+    const extend=typeof(data.payload.extend)=='boolean' && data.payload.extend==true? true:false;
+    console.log(data);
+    if(tokenid && extend){
+        _data.read('tokens',tokenid,(err,tokenData)=>{
+        if(!err && tokenData){
+            if(tokenData.expires<Date.now()){
+                tokenData.expires=Date.now()+1000*60*60
+                _data.update('tokens',tokenid,tokenData,(err)=>{
+                if(!err){
+                    callback(200,{'Success':'Token validity has been extended for 1 hour.'})
+                }
+                else{
+                    callback(500,{'Error':'Error occured while updating token data.'})
+                }
+                });
+            }
+            else{
+                callback(400,{'Error':'Token has already expired.'})
+            }
+        }
+        else{
+            callback(404,{'Error':'The given token Id is not found.'})
+        }
+        });
+    }
+    else{
+        callback(400,{'Error':'The mandatory fields token ID or extend boolean are not provided.'})
+    }
 };
 
 //DELETE method for token
@@ -344,17 +410,130 @@ handlers._cart.post=(data,callback)=>{
 //get method for cart
 //Mandatory Fields: token ID and email
 handlers._cart.get=(data,callback)=>{
-    
+    const email=typeof(data.queryString.email)=='string' && data.queryString.email.trim().length>0 ? data.queryString.email :false;
+    const tokenid=typeof(data.header.tokenid)=='string' && data.header.tokenid.trim().length==20 ?data.header.tokenid :false;
+
+    if(email && tokenid){
+        handlers._token.verifyToken(tokenid,email,(status)=>{
+            if(status){
+                _data.list('menuItems',(err, itemNames)=>{
+                    if(!err && itemNames){
+                        let allItems='';
+                      itemNames.forEach(item => {
+                          allItems=item+' , '+allItems;
+                      });
+                      const trimmedItems={
+                          "items": allItems.replace(/,\s*$/,'')
+                        }
+                        callback(200,trimmedItems);
+                    }
+                    else{
+                        callback(404,{'Error':'No items available in menuItems!'});
+                    }
+                });
+            }
+            else{
+                callback(404,{'Error':'The user with this token id is not authorized to view menu items.'})
+            }
+        });
+    }
+    else{
+        callback(400,{'Error':'The mandatory parameters are not provided!'});
+    }
 };
 
-//put method for cart
-handlers._cart.put=(data,callback)=>{
-    
+//Checkout method, Type:POST
+//Mandatory fields: email and tokenID
+handlers._checkout=(data,callback)=>{
+    const email=typeof(data.queryString.email)=='string' && data.queryString.email.trim().length>0 ? data.queryString.email :false;
+    const tokenid=typeof(data.header.tokenid)=='string' && data.header.tokenid.trim().length==20 ?data.header.tokenid :false;
+    if(email && tokenid){
+        handlers._token.verifyToken(tokenid,email,(status)=>{
+            if(status){
+                _data.read('users',email,(err,userData)=>{
+                    if(!err && userData){
+                       handlers._checkout.calculateTotal(userData.cart,(err,amount)=>{
+                           helpers.stripeApiPayment(amount,config.environment.stripeApi.sourceToken,(err)=>{
+                               if(!err){
+
+
+                                let body='Hi Customer, Order has been successfully placed and $ #amount# has been debited from your card. Regards, Team Pizza App.'.replace('#amount#',(amount/100).toFixed(2));
+                                //Mail API
+                                helpers.sendEmail(email,body,(err)=>{
+                                    if(!err){
+                                        handlers._checkout.emptyCart(email,(err)=>{
+                                            if(!err){
+                                                callback(200,{'Success':'Order has been placed, Payment successfull, mail sent and basket cleared.'});
+                                            }
+                                            else{
+                                                callback(500,{'Error':'Error occured while clearing the basket.'})
+                                            }
+                                        })
+                                        
+                                    }
+                                    else{
+                                        callback(500,{'Error':'Error occured while sending email to user.'})
+                                    }
+                                });
+ 
+ 
+                            }
+                               else{
+                                   callback(500,{'Error':'Error occured while making the transaction to stripe API.'})
+                               }
+                           });
+                       }); 
+                    }
+                    else{
+                        callback(404,{'Error':'The user with this email id is not found.'})
+                    }
+                });
+            }
+            else{
+                callback(401,{'Error':'This user with this tokenId is not authorized to checkOut. Please check if the tokenid is expired.'})
+            }
+        });
+    }
+    else{
+        callback(400,{'Error':'Mandatory parameters are not provided eithrt rmail or tokenid.'});
+    }
 };
 
-//delete method for cart
-handlers._cart.delete=(data,callback)=>{
-    
+//Calculate the total amount of the cart
+handlers._checkout.calculateTotal=(cart,callback)=>{
+
+    let totalAmount=0;
+    let counter=0;
+    const len=cart.length;
+    cart.forEach(item=>{
+        _data.read('menuItems',item,(err,data)=>{
+            counter++;
+            totalAmount=totalAmount+data.price;
+            if(counter==len){
+                callback(false,totalAmount);
+            }
+        });
+    });
+};
+
+//Empty the cart
+handlers._checkout.emptyCart=(email,callback)=>{
+  _data.read('users',email,(err,userData)=>{
+      if(!err && userData){
+        userData.cart=[];
+        _data.update('users',email,userData,(err)=>{
+            if(!err){
+                callback(false);
+            }
+            else{
+                callback(true);
+            }
+        })
+      }
+      else{
+          callback(true);
+      }
+  });
 };
 
 handlers.notFound=(data,callback)=>{

@@ -5,7 +5,7 @@
 
 //Dependencies
 const crypto=require('crypto');
-//const config=require('config');
+const config=require('./config');
 const https=require('https');
 const queryString=require('querystring');
 
@@ -26,7 +26,7 @@ helpers.parseJsonToObj=(JsonStr)=>{
 //Hash the password
 helpers.hashedPassword=(password)=>{
     if(typeof(password)=='string' && password.length>0){
-        const hash= crypto.createHmac('sha256','hashingSecret1',).update(password).digest('hex');
+        const hash= crypto.createHmac('sha256', config.environment.hashingSecrete,).update(password).digest('hex');
         return hash;
     }
     else{
@@ -58,41 +58,95 @@ helpers.createRandomString=(len)=>{
 }; 
 
 //create a stripe API method
-helpers.stripeApiPayment=()=>{
+helpers.stripeApiPayment=(amount,source,callback)=>{
 
-    console.log('Im from payment');
+    amount=typeof(amount)=='number' && amount>0? amount : false;
+    source=typeof(source)=='string' && source.trim().length>0 ?source.trim() : false;
+    if(amount && source){
+        const payload={
+            'amount':amount,
+            'currency':'usd',
+            'source': source
+        };
+    
+        const stringPayload=queryString.stringify(payload);
+    
+        const requestDetails={
+            'auth':config.environment.stripeApi.secretKey,
+            'protocol':'https:',
+            'hostname':'api.stripe.com',
+            'path': '/v1/charges',
+            'method':'POST',
+            'headers':{        
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Length': Buffer.byteLength(stringPayload)
+            }
+        };
+    
+        const req=https.request(requestDetails,(res)=>{
+            const status=res.statusCode;
+            if(status==200 || status==201){
+                callback(false);
+            }
+            else{
+                callback('Status code returned was '+status);
+            }
+        });
+    
+        req.on('error',(e)=>{
+            callback(e);
+        });
+    
+        req.write(stringPayload);
+    
+        req.end();
+    }
+    else{
+        callback('Given parameters are invalid or missing!');   
+    }
+};
 
+//Mailgun , send email method
+helpers.sendEmail=(to, body,callback)=>{
+ 
     const payload={
-        'amount':2000,
-        'currency':'usd',
-        source: 'tok_mastercard'
+        'from': config.environment.mailGun.from,
+        'to': to,
+        'subject': 'Order Confirmation',
+        'text': body
     };
 
-    const stringPayload=queryString.stringify(payload);
-    console.log(stringPayload);
-    console.log(JSON.stringify(payload));
+    const stringPayLoad=queryString.stringify(payload)
+
     const requestDetails={
-        'auth':'sk_test_oBfW5G1NQJPEGsiQsy1CEQWm00O2DPJVj4',
         'protocol':'https:',
-        'hostname':'api.stripe.com',
-        'path': '/v1/charges',
+        'hostname':'api.mailgun.net',
         'method':'POST',
-        'source':'tok_visa',
-        'headers':{        
+        'path':'/v3/sandbox666cb2d2355247ca8651d6b40029f7a1.mailgun.org/messages',
+        'auth': config.environment.mailGun.key,
+        'headers':{
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Content-Length': Buffer.byteLength(stringPayload)
+            'Content-Length': Buffer.byteLength(stringPayLoad)
         }
     };
 
     const req=https.request(requestDetails,(res)=>{
-        console.log(res.statusCode);
+       const status=res.statusCode;
+
+       console.log(status)
+       if(status==200 || status==201){
+        callback(false);
+       }
+       else{
+           callback('Error occured while sending mail, code: '+status);
+       }
     });
 
     req.on('error',(e)=>{
-        console.log('this is error');
+     callback(e);
     });
 
-    req.write(stringPayload);
+    req.write(stringPayLoad);
 
     req.end();
 
